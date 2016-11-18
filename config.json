@@ -1,0 +1,14 @@
+{
+  "db": {
+    "user": "sa",
+    "password": "insert2.0",
+    "server": "192.168.0.100",
+    "database": "FXNSIS45",
+    "options": {
+      "encrypt": false
+    }
+  },
+  "http": {
+    "httpPort": 3002
+  }
+}
