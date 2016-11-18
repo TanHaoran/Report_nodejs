@@ -13,17 +13,28 @@ var dbMssql = require('../common/db_mssql.js');
 /**
  * 用户登陆
  */
-router.get('/login', function (req, res) {
+router.get('/login/:username', function (req, res) {
+
+    // res.set("Content-Type",'text/html');
+    // res.send('<h1>some html</h1>');
 
 
+    var username = req.params.username;
+    var sql = 'select * from Operator where LoginName = @username';
+    var db = new dbMssql();
+    db.FindByCustom(sql, {"username": username}, function (r) {
+            res.json(r);
+        }
+    )
 })
+
 
 /**
  * 获取所有的科室
  */
 router.get('/getOffice', function (req, res) {
     var db = new dbMssql();
-    var sql = 'select * from office';
+    var sql = 'select * from Office';
     db.Find(sql, function (r) {
         res.json(r);
     });
