@@ -3,6 +3,20 @@ var router = express.Router();
 var dbMssql = require('../common/db_mssql.js');
 
 
+/**
+ * 对数据进行md5加密
+ * @param data
+ */
+function md5(data) {
+    var crypto = require('crypto');
+    var content = 'data';
+    var md5 = crypto.createHash('md5');
+    md5.update(content);
+    var result = md5.digest('hex');
+    return result;
+}
+
+
 // router.get('/', function (req, res, next) {
 //     res.render('app', {
 //         title: 'demo',
@@ -13,32 +27,61 @@ var dbMssql = require('../common/db_mssql.js');
 /**
  * 用户登陆
  */
-router.get('/login/:username', function (req, res) {
+router.get('/login/:username/:password', function (req, res) {
 
     // res.set("Content-Type",'text/html');
     // res.send('<h1>some html</h1>');
 
-
     var username = req.params.username;
-    var sql = 'select * from Operator where LoginName = @username';
+    var password = req.params.password;
+
+    var passwordMd5 = md5(password);
+
+    var sql = 'select * from Operator where LoginName = @username and Password = @password';
     var db = new dbMssql();
-    db.FindByCustom(sql, {"username": username}, function (r) {
+    db.FindByCustom(sql, {
+            'username': username,
+            'password': '202CB962AC5975B964B7152D234B70'
+        }, function (r) {
             res.json(r);
         }
     )
 })
 
-
 /**
  * 获取所有的科室
  */
 router.get('/getOffice', function (req, res) {
-    var db = new dbMssql();
     var sql = 'select * from Office';
+    var db = new dbMssql();
     db.Find(sql, function (r) {
         res.json(r);
     });
 })
+
+/**
+ * 用户注册
+ */
+router.get('/register/:username/:password', function (req, res) {
+
+    var username = req.params.username;
+    var password = req.params.password;
+
+    var sql = 'insert into Operator (OperatorID, StaffID, LoginName, Password, Grade) values ' +
+        '(@operatorId, @staffId, @loginName, @password, @grade)';
+    var db = new dbMssql();
+    db.FindByCustom(sql, {
+            'operatorId': '122341',
+            'staffId': '131312',
+            'loginName': username,
+            'password': '202CB962AC5975B964B7152D234B70',
+            'grade': '234'
+        }, function (r) {
+            res.json(r);
+        }
+    )
+})
+
 
 router.get('/', function (req, res) {
     var db = new dbMssql();
