@@ -46,7 +46,7 @@ router.get('/login/:username/:password', function (req, res) {
             res.json(r);
         }
     )
-})
+});
 
 /**
  * 获取所有的科室
@@ -57,7 +57,7 @@ router.get('/getOffice', function (req, res) {
     db.Find(sql, function (r) {
         res.json(r);
     });
-})
+});
 
 /**
  * 用户注册
@@ -80,10 +80,22 @@ router.get('/register/:username/:password', function (req, res) {
             res.json(r);
         }
     )
-})
+});
+
+/**
+ * 获取敏感表结构
+ */
+router.get('/getSensitive', function (req, res) {
+    var db = new dbMssql();
+    var sql = 'select * from Sensitive';
+    db.Find(sql, function (r) {
+        res.json(r);
+    });
+
+});
 
 
-router.get('/', function (req, res) {
+router.get('/', function (req, res, next) {
     var db = new dbMssql();
     var sql = 'select * from office';
     db.Find(sql, function (r) {
