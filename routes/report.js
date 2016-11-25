@@ -16,7 +16,6 @@ function md5(data) {
     return result;
 }
 
-
 // router.get('/', function (req, res, next) {
 //     res.render('app', {
 //         title: 'demo',
@@ -51,7 +50,7 @@ router.get('/login/:username/:password', function (req, res) {
 /**
  * 获取所有的科室
  */
-router.get('/getOffice', function (req, res) {
+router.get('/getOffices', function (req, res) {
     var sql = 'select * from Office';
     var db = new dbMssql();
     db.Find(sql, function (r) {
@@ -85,13 +84,28 @@ router.get('/register/:username/:password', function (req, res) {
 /**
  * 获取敏感表结构
  */
-router.get('/getSensitive', function (req, res) {
+router.get('/getSensitives/:reportFormId', function (req, res) {
+    var reportFormId = req.params.reportFormId;
+
+    var sql = 'select * from Sensitive where ReportFormId = @reportFormId';
     var db = new dbMssql();
-    var sql = 'select * from Sensitive';
+    db.FindByCustom(sql, {
+            'reportFormId': reportFormId,
+        }, function (r) {
+            res.json(r);
+        }
+    )
+});
+
+/**
+ * 获取上报表单数据
+ */
+router.get('/getReportForms', function (req, res) {
+    var db = new dbMssql();
+    var sql = 'select * from ReportForm';
     db.Find(sql, function (r) {
         res.json(r);
     });
-
 });
 
 
