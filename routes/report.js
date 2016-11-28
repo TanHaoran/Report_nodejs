@@ -108,6 +108,18 @@ router.get('/getReportForms', function (req, res) {
     });
 });
 
+/**
+ * 上传一次的表单内容
+ */
+router.post('/postFormData', function (req, res) {
+    var username = req.body.username;
+    var password = req.body.password;
+    console.log('username:' + username);
+    console.log('password:' + password);
+});
+
+
+
 
 router.get('/', function (req, res, next) {
     var db = new dbMssql();
