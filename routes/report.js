@@ -112,10 +112,16 @@ router.get('/getReportForms', function (req, res) {
  * 上传一次的表单内容
  */
 router.post('/postFormData', function (req, res) {
-    var username = req.body.username;
-    var password = req.body.password;
-    console.log('username:' + username);
-    console.log('password:' + password);
+    // res.header("Access-Control-Allow-Origin", "*");
+    // var username = req.body.username;
+    // var password = req.body.password;
+    // console.log('username:' + username);
+    // console.log('password:' + password);
+    var json = JSON.stringify({var1: 'testHAHA', var2: 3});
+    var params = 'user=' + json;
+
+
+    res.json(params);
 });
 
 
