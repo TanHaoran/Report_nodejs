@@ -1,6 +1,7 @@
 var express = require('express');
 var router = express.Router();
 var dbMssql = require('../common/db_mssql.js');
+var async = require('async');
 
 
 /**
@@ -9,30 +10,64 @@ var dbMssql = require('../common/db_mssql.js');
  */
 function md5(data) {
     var crypto = require('crypto');
-    var content = 'data';
+    var content = data;
     var md5 = crypto.createHash('md5');
     md5.update(content);
     var result = md5.digest('hex');
     return result;
 }
 
-// router.get('/', function (req, res, next) {
-//     res.render('app', {
-//         title: 'demo',
-//         url: 'ss'
-//     });
-// });
+/**
+ * 测试方法
+ */
+router.get('/test', function (req, res) {
+
+    var db = new dbMssql();
+    var action = [];
+    action.push(function(next){
+        db.Find("select * from Operator where LoginName='000'", function (resultA,err) {
+            next(err,resultA);
+        });
+    });
+    action.push(function(resultA,next){
+        if(true) {
+            next(new Error('sss'), resultA);
+        }else {
+            db.Find("insert into Operator where LoginName='zl'", function (resultB, err) {
+                next(err, resultA, resultB);
+            });
+        }
+    });
+    action.push(function(resultA, resultB,next){
+        console.log('222');
+        next(err, resultA, resultB);
+    });
+
+    async.waterfall(action, function (err, resultA, resultB) {    //瀑布的每一布，只要cb(err, data)的err发生，就会到这
+        if(err)
+        {
+            console.log('处理错误!');
+            res.json(err.message);
+        }
+        else
+        {
+            console.log('处理成功！');
+            res.json('ok');
+        }
+    });
+});
+
 
 /**
  * 用户登陆
  */
-router.get('/login/:username/:password', function (req, res) {
+router.post('/login', function (req, res) {
 
-    // res.set("Content-Type",'text/html');
-    // res.send('<h1>some html</h1>');
+    var data = req.body.data;
+    var user = JSON.parse(data);
 
-    var username = req.params.username;
-    var password = req.params.password;
+    var username = user.username;
+    var password = user.password;
 
     var passwordMd5 = md5(password);
 
@@ -40,7 +75,7 @@ router.get('/login/:username/:password', function (req, res) {
     var db = new dbMssql();
     db.FindByCustom(sql, {
             'username': username,
-            'password': '202CB962AC5975B964B7152D234B70'
+            'password': passwordMd5
         }, function (r) {
             res.json(r);
         }
@@ -109,34 +144,44 @@ router.get('/getReportForms', function (req, res) {
 });
 
 /**
- * 上传一次的表单内容
+ * 上传一天的表单内容
  */
 router.post('/postFormData', function (req, res) {
-    // res.header("Access-Control-Allow-Origin", "*");
-    // var username = req.body.username;
-    // var password = req.body.password;
-    // console.log('username:' + username);
-    // console.log('password:' + password);
-    var json = JSON.stringify({var1: 'testHAHA', var2: 3});
-    var params = 'user=' + json;
-
-
-    res.json(params);
+    var data = req.body.data;
+    var object = JSON.parse(data);
+    console.log('所有数据：' + data);
+    for (var i = 0; i < object.length; i++) {
+        // 敏感事件id
+        var sensitiveId = object[i].sensitiveId;
+        // 敏感事件人数
+        var people = object[i].people;
+        var sql = 'insert into SensitiveData (SensitiveId, People, SensitiveDate, OperatorId, EditTime) values ' +
+            '(@sensitiveId, @people, @sensitiveDate, @operatorId, @editTime)';
+    }
+    res.json('success');
 });
 
 
+// router.get('/', first, scend);
+//
+// function first(req, res, next) {
+//     var db = new dbMssql();
+//     var sql = 'select * from office';
+//     db.Find(sql, function (r) {
+//         res.json(r);
+//         next();
+//     });
+// }
+// function scend(req, res, next) {
+//     var db = new dbMssql();
+//     var sql = 'select * from office';
+//
+//     db.Find(sql, function (r) {
+//         res.json(r);
+//     });
+// }
 
-
-router.get('/', function (req, res, next) {
-    var db = new dbMssql();
-    var sql = 'select * from office';
-    db.Find(sql, function (r) {
-        res.json(r);
-    });
-});
-
-
-router.get('/:officeId', function (req, res, next) {
+router.get('/:officeId', function (req, res, fff) {
     var officeId = req.params.officeId;
     console.log('officeId = ' + officeId)
     var sql = 'select * from office where officeId = @id';
@@ -145,6 +190,7 @@ router.get('/:officeId', function (req, res, next) {
         {"id": officeid},
         function (r) {
             res.json(r);
+            fff();
         }
     )
 });
