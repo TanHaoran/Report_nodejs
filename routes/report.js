@@ -24,33 +24,31 @@ router.get('/test', function (req, res) {
 
     var db = new dbMssql();
     var action = [];
-    action.push(function(next){
-        db.Find("select * from Operator where LoginName='000'", function (resultA,err) {
-            next(err,resultA);
+    action.push(function (next) {
+        db.Find("select * from Operator where LoginName='000'", function (resultA, err) {
+            next(err, resultA);
         });
     });
-    action.push(function(resultA,next){
-        if(true) {
+    action.push(function (resultA, next) {
+        if (true) {
             next(new Error('sss'), resultA);
-        }else {
+        } else {
             db.Find("insert into Operator where LoginName='zl'", function (resultB, err) {
                 next(err, resultA, resultB);
             });
         }
     });
-    action.push(function(resultA, resultB,next){
+    action.push(function (resultA, resultB, next) {
         console.log('222');
         next(err, resultA, resultB);
     });
 
-    async.waterfall(action, function (err, resultA, resultB) {    //瀑布的每一布，只要cb(err, data)的err发生，就会到这
-        if(err)
-        {
+    async.waterfall(action, function (err, resultA, resultB) {
+        if (err) {
             console.log('处理错误!');
             res.json(err.message);
         }
-        else
-        {
+        else {
             console.log('处理成功！');
             res.json('ok');
         }
@@ -59,7 +57,7 @@ router.get('/test', function (req, res) {
 
 
 /**
- * 用户登陆
+ * 用户登陆(post方法)
  */
 router.post('/login', function (req, res) {
 
@@ -96,24 +94,63 @@ router.get('/getOffices', function (req, res) {
 /**
  * 用户注册
  */
-router.get('/register/:username/:password', function (req, res) {
+router.post('/register', function (req, res) {
 
-    var username = req.params.username;
-    var password = req.params.password;
+    var data = req.body.data;
+    var user = JSON.parse(data);
 
-    var sql = 'insert into Operator (OperatorID, StaffID, LoginName, Password, Grade) values ' +
-        '(@operatorId, @staffId, @loginName, @password, @grade)';
+    var username = user.username;
+    var password = user.password;
+
     var db = new dbMssql();
-    db.FindByCustom(sql, {
-            'operatorId': '122341',
-            'staffId': '131312',
-            'loginName': username,
-            'password': '202CB962AC5975B964B7152D234B70',
-            'grade': '234'
-        }, function (r) {
-            res.json(r);
+    var action = [];
+    // 1. 首先查询Seed表中最大Operator的MaxNo
+    action.push(function (next) {
+        console.log('第1步');
+        db.Find("select MaxNo from Seed where TableName='OPERATOR'", function (resultMaxNo, error) {
+            if (resultMaxNo[0].MaxNo >= 0) {
+                next(error, resultMaxNo[0].MaxNo);
+            }
+        });
+    });
+
+    // 2. 更新Seed表的Operator的MaxNo
+    action.push(function (maxNo, next) {
+        console.log('第2步');
+        maxNo++;
+        db.Find("update Seed set MaxNo=" + maxNo + " where TableName='OPERATOR'", function (seedResult, error) {
+            next(error, maxNo, seedResult);
+        });
+    });
+
+    // 3. 插入Operator表数据
+    action.push(function (maxNo, seedResult, next) {
+        console.log('第3步');
+        var sql = "insert into Operator (OperatorID, StaffID, LoginName, Password, Grade) values " +
+            "(@operatorId, @staffId, @loginName, @password, @grade)";
+        var db = new dbMssql();
+        db.FindByCustom(sql, {
+                'operatorId': maxNo,
+                'staffId': maxNo,
+                'loginName': username,
+                'password': md5(password),
+                'grade': '护士'
+            }, function (operatorResult, error) {
+                next(error, maxNo, operatorResult);
+            }
+        )
+    });
+
+    // 执行方法组
+    async.waterfall(action, function (error, maxNo, operatorResult) {
+        if (error != undefined) {
+            console.log(error.message);
+            res.json('注册失败');
+        } else {
+            console.log('注册成功');
+            res.json('注册成功');
         }
-    )
+    });
 });
 
 /**
@@ -122,7 +159,7 @@ router.get('/register/:username/:password', function (req, res) {
 router.get('/getSensitives/:reportFormId', function (req, res) {
     var reportFormId = req.params.reportFormId;
 
-    var sql = 'select * from Sensitive where ReportFormId = @reportFormId';
+    var sql = 'select * from Sensitive_Sensitive where ReportFormId = @reportFormId';
     var db = new dbMssql();
     db.FindByCustom(sql, {
             'reportFormId': reportFormId,
@@ -137,7 +174,7 @@ router.get('/getSensitives/:reportFormId', function (req, res) {
  */
 router.get('/getReportForms', function (req, res) {
     var db = new dbMssql();
-    var sql = 'select * from ReportForm';
+    var sql = 'select * from Sensitive_ReportForm';
     db.Find(sql, function (r) {
         res.json(r);
     });
@@ -147,9 +184,69 @@ router.get('/getReportForms', function (req, res) {
  * 上传一天的表单内容
  */
 router.post('/postFormData', function (req, res) {
+    // 取得上报科室id
+    var officeId = req.body.officeId;
+    // 取得操作员id
+    var operatorId = req.body.operatorId;
+    // 取得上报数据
     var data = req.body.data;
+    // 获取当前时间
+    var date = new Date().toLocaleDateString();
+
+
+    var db = new dbMssql();
+    var action = [];
+    // 1. 首先查询当天该科室是否有数据
+    action.push(function (next) {
+        console.log('第1步');
+        var sql = 'select * from Sensitive_ReportOffice where OfficeId=@officeId and Date=@date';
+        db.FindByCustom(sql, {
+            'officeId': officeId,
+            'date': date
+        }, function (firstResult, error) {
+            next(error, firstResult);
+        });
+    });
+
+    // 2. 然后根据查询结果result.length是更新还是插入
+    action.push(function (firstResult, next) {
+        console.log('第2步');
+        // 要执行的sql语句
+        var sql;
+        // 要有变化的ReportOffice主键id
+        var id;
+        if (firstResult.length > 0) {
+            id = firstResult[0].ReportOfficeId;
+            sql = "update Sensitive_ReportOffice set OperatorId='" + operatorId + "'";
+            db.Find(sql, function (result, error) {
+                next(error, id);
+            });
+        } else {
+            sql = "insert into Sensitive_ReportOffice (OfficeId, OperatorId, Date) values " +
+                "('" + officeId + "','" + operatorId + "','" + date + "')";
+            db.Find(sql, function (result, error) {
+                next(error, result);
+            });
+        }
+    });
+
+    // 3. 取得将要有变化的ReportOffice主键id
+    action.push(function (id, next) {
+        if (id != undefined) {
+            next(undefined, id);
+        } else {
+            var sql = 'select * from Sensitive_ReportOffice where OfficeId=@officeId and Date=@date';
+            db.FindByCustom(sql, {
+                'officeId': officeId,
+                'date': date
+            }, function (result, error) {
+                next(error, result[0].ReportOfficeId);
+            });
+        }
+    });
+
+    // 4. 开始逐条插入数据
     var object = JSON.parse(data);
-    console.log('所有数据：' + data);
     for (var i = 0; i < object.length; i++) {
         // 敏感事件id
         var sensitiveId = object[i].sensitiveId;
@@ -158,6 +255,12 @@ router.post('/postFormData', function (req, res) {
         var sql = 'insert into SensitiveData (SensitiveId, People, SensitiveDate, OperatorId, EditTime) values ' +
             '(@sensitiveId, @people, @sensitiveDate, @operatorId, @editTime)';
     }
+
+    // 执行方法组
+    async.waterfall(action, function (error, result) {
+
+    });
+
     res.json('success');
 });
 
