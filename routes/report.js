@@ -81,7 +81,7 @@ router.post('/login', function (req, res) {
 });
 
 /**
- * 获取所有的科室
+ * 获取所有的科室(get)
  */
 router.get('/getOffices', function (req, res) {
     var sql = 'select * from Office';
@@ -92,7 +92,7 @@ router.get('/getOffices', function (req, res) {
 });
 
 /**
- * 用户注册
+ * 用户注册(post方法)
  */
 router.post('/register', function (req, res) {
 
@@ -118,7 +118,9 @@ router.post('/register', function (req, res) {
     action.push(function (maxNo, next) {
         console.log('第2步');
         maxNo++;
-        db.Find("update Seed set MaxNo=" + maxNo + " where TableName='OPERATOR'", function (seedResult, error) {
+        db.FindByCustom("update Seed set MaxNo=@maxNo where TableName='OPERATOR'", {
+            'maxNo': maxNo
+        }, function (seedResult, error) {
             next(error, maxNo, seedResult);
         });
     });
@@ -154,12 +156,12 @@ router.post('/register', function (req, res) {
 });
 
 /**
- * 获取敏感表结构
+ * 获取敏感表结构(get)
  */
 router.get('/getSensitives/:reportFormId', function (req, res) {
     var reportFormId = req.params.reportFormId;
 
-    var sql = 'select * from Sensitive_Sensitive where ReportFormId = @reportFormId';
+    var sql = 'select * from Sensitive_Sensitive where ReportFormId=@reportFormId';
     var db = new dbMssql();
     db.FindByCustom(sql, {
             'reportFormId': reportFormId,
@@ -170,7 +172,7 @@ router.get('/getSensitives/:reportFormId', function (req, res) {
 });
 
 /**
- * 获取上报表单数据
+ * 获取上报表单数据(get)
  */
 router.get('/getReportForms', function (req, res) {
     var db = new dbMssql();
@@ -181,18 +183,17 @@ router.get('/getReportForms', function (req, res) {
 });
 
 /**
- * 上传一天的表单内容
+ * 上传一天的表单内容(post方法)
  */
 router.post('/postFormData', function (req, res) {
     // 取得上报科室id
     var officeId = req.body.officeId;
     // 取得操作员id
     var operatorId = req.body.operatorId;
+    // 获取上报时间
+    var date = req.body.date;
     // 取得上报数据
     var data = req.body.data;
-    // 获取当前时间
-    var date = new Date().toLocaleDateString();
-
 
     var db = new dbMssql();
     var action = [];
@@ -217,14 +218,20 @@ router.post('/postFormData', function (req, res) {
         var id;
         if (firstResult.length > 0) {
             id = firstResult[0].ReportOfficeId;
-            sql = "update Sensitive_ReportOffice set OperatorId='" + operatorId + "'";
-            db.Find(sql, function (result, error) {
+            sql = "update Sensitive_ReportOffice set OperatorId=@operatorId";
+            db.FindByCustom(sql, {
+                'operatorId': operatorId
+            }, function (result, error) {
                 next(error, id);
             });
         } else {
-            sql = "insert into Sensitive_ReportOffice (OfficeId, OperatorId, Date) values " +
-                "('" + officeId + "','" + operatorId + "','" + date + "')";
-            db.Find(sql, function (result, error) {
+            sql = 'insert into Sensitive_ReportOffice (OfficeId, OperatorId, Date) values ' +
+                '(@officeId, @operatorId, @date)';
+            db.FindByCustom(sql, {
+                'officeId': officeId,
+                'operatorId': operatorId,
+                'date': date
+            }, function (result, error) {
                 next(error, result);
             });
         }
@@ -252,93 +259,99 @@ router.post('/postFormData', function (req, res) {
         var sensitiveId = object[i].sensitiveId;
         // 敏感事件人数
         var people = object[i].people;
-        var sql = 'insert into SensitiveData (SensitiveId, People, SensitiveDate, OperatorId, EditTime) values ' +
-            '(@sensitiveId, @people, @sensitiveDate, @operatorId, @editTime)';
+        if (people == undefined) {
+            people = 0;
+        }
+        // 4.1 首先查看是否存在这条记录
+
+        function addActionCheck(sensitiveId) {
+            var s = sensitiveId;
+            action.push(function (id, next) {
+                var sql = 'select * from Sensitive_ReportData where ReportOfficeId=@reportOfficeId and SensitiveId=@sensitiveId';
+                db.FindByCustom(sql, {
+                    'reportOfficeId': id,
+                    'sensitiveId': s
+                }, function (data, error) {
+                    next(error, id, data);
+                });
+            });
+        }
+
+        addActionCheck(sensitiveId);
+
+        // 4.2 如果存在就更新，不存在就插入
+        function addActionUpdate(array) {
+            var s = array[0];
+            var p = array[1];
+            action.push(function (id, data, next) {
+                var sql;
+                if (data.length > 0) {
+                    sql = 'update Sensitive_ReportData set People=@p where ReportOfficeId=@id and SensitiveId=@s';
+                } else {
+                    sql = 'insert into Sensitive_ReportData (SensitiveId, ReportOfficeId, People) values (@s, @id, @p)';
+                }
+                db.FindByCustom(sql, {
+                    'p': p,
+                    'id': id,
+                    's': s
+                }, function (result, error) {
+                    next(error, id);
+                });
+            });
+        }
+
+        addActionUpdate([sensitiveId, people]);
+
     }
 
     // 执行方法组
     async.waterfall(action, function (error, result) {
+        if (error != undefined) {
+            console.log(error.message);
+            res.json('录入失败');
+        } else {
+            console.log('录入成功');
+            res.json('录入成功');
+        }
+    });
+});
 
+/**
+ * 获取一天的表单记录(get)
+ */
+router.get('/getFormData/:officeId/:date', function (req, res) {
+    var officeId = req.params.officeId;
+    var date = req.params.date;
+
+    var db = new dbMssql();
+
+    async.waterfall([function (next) {
+        var sql = 'select * from Sensitive_ReportOffice where OfficeId=@officeId and Date=@date';
+        db.FindByCustom(sql, {
+                'officeId': officeId,
+                'date': date
+            }, function (result, error) {
+                next(error, result);
+            }
+        )
+    }, function (lastResult, next) {
+        var reportOfficeId;
+        if (lastResult.length == 0) {
+            reportOfficeId = 0;
+        } else {
+            reportOfficeId = lastResult[0].ReportOfficeId;
+        }
+        var sql = 'select * from Sensitive_ReportData where ReportOfficeId=@reportOfficeId';
+        db.FindByCustom(sql, {
+                'reportOfficeId': reportOfficeId
+            }, function (result, error) {
+                next(error, result);
+            }
+        )
+    }], function (err, result) {
+        res.json(JSON.stringify(result));
     });
 
-    res.json('success');
 });
-
-
-// router.get('/', first, scend);
-//
-// function first(req, res, next) {
-//     var db = new dbMssql();
-//     var sql = 'select * from office';
-//     db.Find(sql, function (r) {
-//         res.json(r);
-//         next();
-//     });
-// }
-// function scend(req, res, next) {
-//     var db = new dbMssql();
-//     var sql = 'select * from office';
-//
-//     db.Find(sql, function (r) {
-//         res.json(r);
-//     });
-// }
-
-router.get('/:officeId', function (req, res, fff) {
-    var officeId = req.params.officeId;
-    console.log('officeId = ' + officeId)
-    var sql = 'select * from office where officeId = @id';
-    var db = new dbMssql();
-    db.FindByCustom(sql,
-        {"id": officeid},
-        function (r) {
-            res.json(r);
-            fff();
-        }
-    )
-});
-
-
-// router.get('/:officeid', function (req, res, next) {
-//     var officeid = req.params.officeid;
-//     console.log('officeid =' + officeid)
-//     var sql = 'select * from office where officeid = @id';
-//     var db = new dbMssql();
-//     db.FindByCustom(sql,
-//         {"id": officeid},
-//         function (r) {
-//             res.json(r);
-//         }
-//     )
-// });
-
-
-// router.get('/:userid',loadUserid);
-
-function loadAll(req, res, next) {
-    var db = new dbMssql();
-    var sql = 'select * from office';
-    db.Find(sql,
-        function (r) {
-            res.json(r);
-        });
-}
-
-// function loadUserid(req,res,next){
-//     var userid = req.params.userid;
-//     var db = new dbMssql();
-//     var sql = "select * from User where UserId = @id ";
-//     db.FindByCustom(sql,
-//         {"id":userid},
-//         function(r){
-//             //res.json(r);
-//             if(r.result > 0){
-//                 next();
-
-//             }
-//         }    
-//     )
-// }
-
 
 module.exports = router;
