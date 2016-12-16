@@ -349,7 +349,10 @@ router.get('/getFormData/:officeId/:date', function (req, res) {
             }
         )
     }], function (err, result) {
-        res.json(JSON.stringify(result));
+        var lastIndex = date.lastIndexOf('-');
+        var day = date.substr(lastIndex + 1, date.length);
+        var json = JSON.stringify({'day': day, 'data': result});
+        res.json(json);
     });
 
 });
